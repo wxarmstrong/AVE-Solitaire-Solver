@@ -5,6 +5,9 @@
 #include <iostream>
 using namespace std;
 
+/* Distance matrix represents the # of frames it
+takes to move the cursor between any two locations */
+
 const int DISTANCE[13][13] = {
 	{ 0, 2, 4, 6, 8,10, 2, 2, 4, 4, 6, 8,10},
 	{ 2, 0, 2, 4, 6, 8, 2, 2, 4, 2, 4, 6, 8},
@@ -87,17 +90,27 @@ private:
 };
 
 int State::hVal() {
-	// Heuristic
-	// Find the # of frames it takes to:
-	// Deposit all of the remaining deck into the pile
-	// Move all of the pile into the foundation
-	// Uncover all of the hidden cards
+	/*
+	Heuristic
+
+	Since the TAS input ends when the "autosolver" takes over,
+	the goal state is not when the remaining cards are zero,
+	but rather when: 
+	- Deck + Pile are empty
+	- All cards revealed
+
+	- At least 7 frames for each card in the deck to be moved to the pile
+	- At least 24 frames to move all those cards to the foundation (including select + cursor move)
+	- For each tableau, 24 frames to reveal each hidden card
+	  (this is the minimum time it takes to move all of the visible cards off of them +
+	   the time it takes to reveal the rest of the hidden cards in that tableau)
+	*/
 	int total = 0;
 	total += 7 * deckSize();
-	total += 20 * (deckSize() + pileSize());
+	total += 24 * (deckSize() + pileSize());
 	for (int i = 0; i < 7; i++)
 		if (tableaux_visible[i].size() > 0 && tableaux_hidden[i].size() > 0)
-			total += 20 * tableaux_hidden[i].size();
+			total += 24 * tableaux_hidden[i].size();
 	return total;
 }
 
