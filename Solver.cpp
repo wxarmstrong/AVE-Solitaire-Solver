@@ -1,8 +1,9 @@
 #include <stack>
 #include <string>
-#include <queue>
+#include "fixed-size-priority-queue.h"
 #include <vector>
 #include <iostream>
+#include <map>
 using namespace std;
 
 /* Distance matrix represents the # of frames it
@@ -81,6 +82,8 @@ public:
 
 	bool win();
 
+	string hash();
+
 private:
 	stack<Card> deck;
 	stack<Card> pile;
@@ -88,6 +91,65 @@ private:
 	vector<stack<Card>> tableaux_visible;
 	vector<stack<Card>> tableaux_hidden;
 };
+
+string State::hash() {
+	string temp = to_string(position);
+	temp += "d";
+	stack<Card> tempDeck = deck;
+	while (!tempDeck.empty())
+	{
+		Card c = tempDeck.top();
+		tempDeck.pop();
+		temp += c.getRank();
+		temp += c.getSuit();
+	}
+	temp += "p";
+	stack<Card> tempPile = pile;
+	while (!tempPile.empty())
+	{
+		Card c = tempPile.top();
+		tempPile.pop();
+		temp += c.getRank();
+		temp += c.getSuit();
+	}
+	for (int i = 0; i < 4; i++)
+	{
+		temp += "t";
+		stack<Card> curF = foundation[i];
+		while (!curF.empty())
+		{
+			Card c = curF.top();
+			curF.pop();
+			temp += c.getRank();
+			temp += c.getSuit();
+		}
+	}
+	for (int i = 0; i < 7; i++)
+	{
+		temp += "v";
+		stack<Card> curV = tableaux_visible[i];
+		while (!curV.empty())
+		{
+			Card c = curV.top();
+			curV.pop();
+			temp += c.getRank();
+			temp += c.getSuit();
+		}
+	}
+	for (int i = 0; i < 7; i++)
+	{
+		temp += "h";
+		stack<Card> curH = tableaux_hidden[i];
+		while (!curH.empty())
+		{
+			Card c = curH.top();
+			curH.pop();
+			temp += c.getRank();
+			temp += c.getSuit();
+		}
+	}
+	return temp;
+}
 
 int State::hVal() {
 	/*
@@ -105,6 +167,10 @@ int State::hVal() {
 	  (this is the minimum time it takes to move all of the visible cards off of them +
 	   the time it takes to reveal the rest of the hidden cards in that tableau)
 	*/
+
+	//Test
+	return 7 * deckSize() + 24*(deckSize() + pileSize());
+	//
 	int total = 0;
 	total += 7 * deckSize();
 	total += 24 * (deckSize() + pileSize());
@@ -143,11 +209,11 @@ bool goesOnTop(Card top, Card bottom) {
 	string suitTop = top.getSuit();
 	string suitBottom = bottom.getSuit();
 
-	if (rankTop == "Spades" || rankTop == "Clubs")
-		if (rankBottom == "Spades" || rankBottom == "Clubs")
+	if (suitTop == "Spades" || suitTop == "Clubs")
+		if (suitBottom == "Spades" || suitBottom == "Clubs")
 			return false;
-	if (rankTop == "Hearts" || rankTop == "Diamonds")
-		if (rankBottom == "Hearts" || rankBottom == "Diamonds")
+	if (suitTop == "Hearts" || suitTop == "Diamonds")
+		if (suitBottom == "Hearts" || suitBottom == "Diamonds")
 			return false;
 
 	if (rankTop == "A") return (rankBottom == "2");
@@ -246,6 +312,9 @@ void State::drawCard() {
 }
 
 bool State::win() {
+	//Test
+	if (deckSize() + pileSize() == 0) return true;
+	//
 	//Input ends once autoplay takes over (all remaining cards revealed & in tableaux)
 	if (cardsRemaining == 0) return true;
 	if (deckSize() + pileSize() > 0) return false;
@@ -423,7 +492,7 @@ int main() {
 	State initialState(deck, tableaux_visible, tableaux_hidden);
 	initialState.fVal = initialState.gVal + initialState.hVal();
 
-	priority_queue<State> fringe;
+	fixed_size_priority_queue<State> fringe(200);
 	
 	cout << "Initial fVal: " << initialState.fVal << endl;
 
@@ -431,13 +500,16 @@ int main() {
 
 	vector<string> bestMoves;
 
+	map<string,int> stateList;
+	stateList[initialState.hash()] = initialState.fVal;
+
 	while (!fringe.empty())
 	{
 		State curState = fringe.top();
 		fringe.pop();
 		cout << "Current fVal: " << curState.fVal << endl;
-		cout << "DeckSize: " << curState.deckSize() << ", PileSize: " << curState.pileSize() << endl;
-		cout << "Cards remaining: " << curState.cardsRemaining << endl << endl;
+		//cout << "DeckSize: " << curState.deckSize() << ", PileSize: " << curState.pileSize() << endl;
+		//cout << "Cards remaining: " << curState.cardsRemaining << endl << endl;
 
 		// Check if in win state
 		if (curState.win())
@@ -449,7 +521,7 @@ int main() {
 		// Action: Draw a card from the deck
 		if (curState.deckSize() + curState.pileSize() > 0)
 		{
-			cout << "Drawing a card from the deck..." << endl;
+			//cout << "Drawing a card from the deck..." << endl;
 			State newState(curState);
 			// Add the # of frames it takes to move the cursor to the deck
 			newState.gVal += DISTANCE[newState.position][0];
@@ -481,7 +553,14 @@ int main() {
 			newState.moveList.push_back("DRAW");
 			newState.fVal = newState.gVal + newState.hVal();
 
-			fringe.push(newState);
+			string newHash = newState.hash();
+			//cout << stateList.count(newHash) << endl;
+			if (stateList.count(newHash) == 0 || stateList[newHash] > newState.fVal)
+			{
+				stateList[newHash] = newState.fVal;
+				fringe.push(newState);
+			}
+
 		}
 
 		// Action: Move a card from the pile to the foundation
@@ -492,14 +571,14 @@ int main() {
 			{
 				if (topCard.getRank() == "A" && curState.fndEmpty(i))
 				{
-					cout << "Moving Ace from pile to foundation..." << endl;
+					//cout << "Moving Ace from pile to foundation..." << endl;
 					State newState(curState);
 					newState.pileToFoundation(i);
 					
 					// Add the # of frames it takes to move the cursor to the pile
 					newState.gVal += DISTANCE[newState.position][1];
 					// Add the # of frames it takes to select a card
-					newState.gVal += 2;
+					if (DISTANCE[newState.position][1]==0) newState.gVal += 2;
 					// Add the # of frames it takes to move the cursor to the foundation
 					newState.gVal += DISTANCE[1][2 + i];
 					// Add the # of frames it takes to do the move
@@ -508,15 +587,23 @@ int main() {
 						newState.gVal += 4;
 
 					newState.position = 2 + i;
-					newState.moveList.push_back("P->F" + i);
+					string temp = "P->F";
+					temp += to_string(i);
+					newState.moveList.push_back(temp);
 					newState.cardsRemaining--;
 					newState.fVal = newState.gVal + newState.hVal();
 
-					fringe.push(newState);
+					string newHash = newState.hash();
+					//cout << stateList.count(newHash) << endl;
+					if (stateList.count(newHash) == 0 || stateList[newHash] > newState.fVal)
+					{
+						stateList[newHash] = newState.fVal;
+						fringe.push(newState);
+					}
 				}
 				else if (!curState.fndEmpty(i))
 				{
-					cout << "Moving card from pile to foundation..." << endl;
+					//cout << "Moving card from pile to foundation..." << endl;
 					Card topFnd = curState.topFnd(i);
 					if (topCard.getSuit() == topFnd.getSuit() && rankSucceeds(topCard, topFnd))
 					{
@@ -526,7 +613,7 @@ int main() {
 						// Add the # of frames it takes to move the cursor to the pile
 						newState.gVal += DISTANCE[newState.position][1];
 						// Add the # of frames it takes to select a card
-						newState.gVal += 2;
+						if (DISTANCE[newState.position][1] == 0) newState.gVal += 2;
 						// Add the # of frames it takes to move the cursor to the foundation
 						newState.gVal += DISTANCE[1][2 + i];
 						// Add the # of frames it takes to do the move
@@ -535,11 +622,19 @@ int main() {
 							newState.gVal += 4;
 
 						newState.position = 2 + i;
-						newState.moveList.push_back("P->F" + i);
+						string temp = "P->F";
+						temp += to_string(i);
+						newState.moveList.push_back(temp);
 						newState.cardsRemaining--;
 						newState.fVal = newState.gVal + newState.hVal();
 
-						fringe.push(newState);
+						string newHash = newState.hash();
+						//cout << stateList.count(newHash) << endl;
+						if (stateList.count(newHash) == 0 || stateList[newHash] > newState.fVal)
+						{
+							stateList[newHash] = newState.fVal;
+							fringe.push(newState);
+						}
 					}
 				}
 			}
@@ -555,14 +650,14 @@ int main() {
 				{
 					if (topCard.getRank() == "K")
 					{
-						cout << "Moving King from pile to Tableau #" << i << "..." << endl;
+						//cout << "Moving King from pile to Tableau #" << i << "..." << endl;
 						State newState(curState);
 						newState.pileToTableau(i);
 
 						// Add the # of frames it takes to move the cursor to the pile
 						newState.gVal += DISTANCE[newState.position][1];
 						// Add the # of frames it takes to select a card
-						newState.gVal += 2;
+						if (DISTANCE[newState.position][1] == 0) newState.gVal += 2;
 						// Add the # of frames it takes to move the cursor to the tableau
 						newState.gVal += DISTANCE[1][6 + i];
 						// Add the # of frames it takes to do the move
@@ -571,10 +666,18 @@ int main() {
 							newState.gVal += 4;
 
 						newState.position = 6 + i;
-						newState.moveList.push_back("P->T" + i);
+						string temp = "P->T";
+						temp += to_string(i);
+						newState.moveList.push_back(temp);
 						newState.fVal = newState.gVal + newState.hVal();
 
-						fringe.push(newState);
+						string newHash = newState.hash();
+						//cout << stateList.count(newHash) << endl;
+						if (stateList.count(newHash) == 0 || stateList[newHash] > newState.fVal)
+						{
+							stateList[newHash] = newState.fVal;
+							fringe.push(newState);
+						}
 					}
 				}
 				else
@@ -582,14 +685,15 @@ int main() {
 					Card tabCard = curState.topTab(i);
 					if (goesOnTop(topCard, tabCard))
 					{
-						cout << "Moving card from pile to Tableau #" << i << "..." << endl;
+						//cout << "Moving " << topCard.getRank() << " of " << topCard.getSuit() << " onto " << tabCard.getRank() << " of " << tabCard.getSuit() << endl;
+						//cout << "Moving card from pile to Tableau #" << i << "..." << endl;
 						State newState(curState);
 						newState.pileToTableau(i);
 
 						// Add the # of frames it takes to move the cursor to the pile
 						newState.gVal += DISTANCE[newState.position][1];
 						// Add the # of frames it takes to select a card
-						newState.gVal += 2;
+						if (DISTANCE[newState.position][1] == 0) newState.gVal += 2;
 						// Add the # of frames it takes to move the cursor to the tableau
 						newState.gVal += DISTANCE[1][6 + i];
 						// Add the # of frames it takes to do the move
@@ -598,10 +702,18 @@ int main() {
 							newState.gVal += 4;
 
 						newState.position = 6 + i;
-						newState.moveList.push_back("P->T" + i);
+						string temp = "P->T";
+						temp += to_string(i);
+						newState.moveList.push_back(temp);
 						newState.fVal = newState.gVal + newState.hVal();
 
-						fringe.push(newState);
+						string newHash = newState.hash();
+						//cout << stateList.count(newHash) << endl;
+						if (stateList.count(newHash) == 0 || stateList[newHash] > newState.fVal)
+						{
+							stateList[newHash] = newState.fVal;
+							fringe.push(newState);
+						}
 
 					}
 				}
@@ -621,13 +733,13 @@ int main() {
 					{
 						if (topCard.getRank() == "A")
 						{
-							cout << "Moving Ace from Tableau #" << i << " to Foundation #" << j << endl;
+							//cout << "Moving Ace from Tableau #" << i << " to Foundation #" << j << endl;
 							State newState(curState);
 							newState.tabToFoundation(i, j);
 							// Add the # of frames it takes to move the cursor to the tableau
 							newState.gVal += DISTANCE[newState.position][6 + i];
 							// Add the # of frames it takes to select a card
-							newState.gVal += 2;
+							if (DISTANCE[newState.position][6 + i] == 0) newState.gVal += 2;
 							// Add the # of frames it takes to move the cursor to the foundation
 							newState.gVal += DISTANCE[6 + i][2 + j];
 							// Add the # of frames it takes to do the move
@@ -635,10 +747,20 @@ int main() {
 
 							newState.position = 2 + j;
 							newState.cardsRemaining--;
-							newState.moveList.push_back("T->F" + j);
+							string temp = "T";
+							temp += to_string(i);
+							temp += "->F";
+							temp += to_string(j);
+							newState.moveList.push_back(temp);
 							newState.fVal = newState.gVal + newState.hVal();
 
-							fringe.push(newState);
+							string newHash = newState.hash();
+							//cout << stateList.count(newHash) << endl;
+							if (stateList.count(newHash) == 0 || stateList[newHash] > newState.fVal)
+							{
+								stateList[newHash] = newState.fVal;
+								fringe.push(newState);
+							}
 
 						}
 					}
@@ -646,13 +768,13 @@ int main() {
 						Card fndCard = curState.topFnd(j);
 						if (goesOnTop(topCard, fndCard))
 						{
-							cout << "Moving card from Tableau #" << i << " to Foundation #" << j << endl;
+							//cout << "Moving card from Tableau #" << i << " to Foundation #" << j << endl;
 							State newState(curState);
 							newState.tabToFoundation(i, j);
 							// Add the # of frames it takes to move the cursor to the tableau
 							newState.gVal += DISTANCE[newState.position][6 + i];
 							// Add the # of frames it takes to select a card
-							newState.gVal += 2;
+							if (DISTANCE[newState.position][6 + i] == 0) newState.gVal += 2;
 							// Add the # of frames it takes to move the cursor to the foundation
 							newState.gVal += DISTANCE[6 + i][2 + j];
 							// Add the # of frames it takes to do the move
@@ -660,10 +782,20 @@ int main() {
 
 							newState.position = 2 + j;
 							newState.cardsRemaining--;
-							newState.moveList.push_back("T->F" + j);
+							string temp = "T";
+							temp += to_string(i);
+							temp += "->F";
+							temp += to_string(j);
+							newState.moveList.push_back(temp);
 							newState.fVal = newState.gVal + newState.hVal();
 
-							fringe.push(newState);
+							string newHash = newState.hash();
+							//cout << stateList.count(newHash) << endl;
+							if (stateList.count(newHash) == 0 || stateList[newHash] > newState.fVal)
+							{
+								stateList[newHash] = newState.fVal;
+								fringe.push(newState);
+							}
 						}
 					}
 				}
@@ -685,24 +817,36 @@ int main() {
 						{
 							if (topCard.getRank() == "K")
 							{
-								cout << "Moving King from Tableau #" << i << "to Tableau #" << j << endl;
+								//cout << "Moving King from Tableau #" << i << "to Tableau #" << j << endl;
 
 								State newState(curState);
 								newState.tabToTab(i, j, 1);
 								// Add the # of frames it takes to move the cursor to the first tableau
 								newState.gVal += DISTANCE[newState.position][6 + i];
 								// Add the # of frames it takes to select a card
-								newState.gVal += 2;
+								if (DISTANCE[newState.position][6 + i] == 0) newState.gVal += 2;
 								// Add the # of frames it takes to move the cursor to the second tableau
 								newState.gVal += DISTANCE[6 + i][6 + j];
 								// Add the # of frames it takes to do the move
 								newState.gVal += 22;
 
 								newState.position = 6 + j;
-								newState.moveList.push_back("T" + to_string(i) + "->T" + to_string(j));
+
+								string temp = "T";
+								temp += to_string(i);
+								temp += "->T";
+								temp += to_string(j);
+								newState.moveList.push_back(temp);
+
 								newState.fVal = newState.gVal + newState.hVal();
 
-								fringe.push(newState);
+								string newHash = newState.hash();
+								//cout << stateList.count(newHash) << endl;
+								if (stateList.count(newHash) == 0 || stateList[newHash] > newState.fVal)
+								{
+									stateList[newHash] = newState.fVal;
+									fringe.push(newState);
+								}
 							}
 						}
 						else
@@ -710,24 +854,36 @@ int main() {
 							int num = curState.moveNum(i, j);
 							if (num > 0)
 							{
-								cout << "Moving " << num << " cards from Tableau #" << i << " to Tableau #" << j << endl;
+								//cout << "Moving " << num << " cards from Tableau #" << i << " to Tableau #" << j << endl;
 
 								State newState(curState);
 								newState.tabToTab(i, j, num);
 								// Add the # of frames it takes to move the cursor to the first tableau
 								newState.gVal += DISTANCE[newState.position][6 + i];
 								// Add the # of frames it takes to select a card
-								newState.gVal += 2;
+								if (DISTANCE[newState.position][6 + i] == 0) newState.gVal += 2;
 								// Add the # of frames it takes to move the cursor to the second tableau
 								newState.gVal += DISTANCE[6 + i][6 + j];
 								// Add the # of frames it takes to do the move
 								newState.gVal += 11 * (num + 1);
 
 								newState.position = 6 + j;
-								newState.moveList.push_back("T" + to_string(i) + "->T" + to_string(j));
+
+								string temp = "T";
+								temp += to_string(i);
+								temp += "->T";
+								temp += to_string(j);
+								newState.moveList.push_back(temp);
+
 								newState.fVal = newState.gVal + newState.hVal();
 
-								fringe.push(newState);
+								string newHash = newState.hash();
+								//cout << stateList.count(newHash) << endl;
+								if (stateList.count(newHash) == 0 || stateList[newHash] > newState.fVal)
+								{
+									stateList[newHash] = newState.fVal;
+									fringe.push(newState);
+								}
 							}
 						}
 					}
@@ -735,7 +891,7 @@ int main() {
 			}
 		}
 
-		cout << endl;
+		//cout << endl;
 	}
 
 	for (int i = 0; i < bestMoves.size(); i++)
