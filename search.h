@@ -1,12 +1,14 @@
 #ifndef SEARCH_H
 #define SEARCH_H
 
+#include <vector>
 #include <iostream>
 #include <queue>
-#include <string>
-#include <vector>
 
-struct Solution : public std::vector<std::string> {
+#define PQ std::priority_queue<SearchState*, std::vector<SearchState*>, SearchState::Compare>
+
+class Solution : public std::vector<std::string> {
+public:
 	void print();
 	int cost = 0;
 };
@@ -27,43 +29,69 @@ struct SearchState {
 			return false;
 		}
 	};
-
-	virtual bool goal() = 0;
-	virtual int h() = 0;
-	virtual void expand() = 0;
-	virtual std::string hash() = 0;
+	SearchState() {}
+	SearchState(SearchState& s);
+	virtual ~SearchState();
+	virtual SearchState* clone() = 0;
 	virtual void print() = 0;
+	virtual void expand() = 0;
 
+	virtual std::string hash() = 0;
+	virtual int h() const = 0;
+	virtual bool goal() const = 0;
 	int f = 0;
 	int g = 0;
 	Solution curPath;
-	std::priority_queue<SearchState*, std::vector<SearchState*>, Compare> kids;
+	PQ kids;
 };
 
-struct SearchDomain {
-	~SearchDomain();
-	void printInit() const;
-	SearchState* init;
-};
-
-SearchDomain::~SearchDomain() {
-	delete init;
+SearchState::SearchState(SearchState& s) {
+	f = s.f;
+	g = s.g;
+	curPath = s.curPath;
 }
 
-void SearchDomain::printInit() const {
+SearchState::~SearchState() {
+	while (!kids.empty())
+	{
+		SearchState* k = kids.top();
+		kids.pop();
+		delete k;
+	}
+}
+
+struct SearchSpace {
+public:
+	~SearchSpace();
+	void printInit() const;
+	virtual SearchSpace* clone() = 0;
+	SearchState* init = nullptr;
+};
+
+SearchSpace::~SearchSpace() {
+	if (init != nullptr)
+		delete init;
+}
+
+void SearchSpace::printInit() const {
 	init->print();
 }
 
-struct SearchAlg {
-	~SearchAlg();
+class SearchAlg {
+public:
+	virtual ~SearchAlg();
 	virtual Solution solve() = 0;
-	virtual void solve(SearchState* s) = 0;
-	SearchDomain* dom;
+	SearchSpace* dom = nullptr;
 	Solution best;
 };
 
 SearchAlg::~SearchAlg() {
-	delete dom;
+	std::cout << "~SearchAlg()" << std::endl;
+	if (dom != nullptr)
+	{
+		std::cout << " Deleting dom..." << std::endl;
+		delete dom;
+	}
 }
 
 #endif SEARCH_H

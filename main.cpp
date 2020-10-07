@@ -1,17 +1,15 @@
-#include <iostream>
 #include <fstream>
-#include "memorybranch.h"
+#include "idastar_m.h"
 #include "solitaire.h"
+#include "testgame.h"
 
-int main() {
+int main()
+{
 	std::ifstream in("instance.txt");
-	Solitaire* s = new Solitaire(in);
-	s->printInit();
-	MemoryBranch* solver = new MemoryBranch(s);
-	Solution sol = solver->solve();
-	if (!sol.empty())
-		sol.print();
-	else
-		std::cout << "No solution found" << std::endl;
-	return 0;
+	//Solitaire s(in);
+	TestGame s;
+	s.printInit();
+	IDAStarM solver(s);
+	Solution sol = solver.solve();
+	sol.print();
 }
